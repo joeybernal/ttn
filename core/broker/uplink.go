@@ -210,7 +210,7 @@ func (b *broker) HandleUplink(uplink *pb.UplinkMessage) (err error) {
 
 	handler <- deduplicatedUplink
 
-	for _, monitor := range b.Monitors {
+	for _, monitor := range b.Monitors.BrokerClients() {
 		ctx.Debug("Sending uplink to monitor")
 		go monitor.SendUplink(deduplicatedUplink)
 	}

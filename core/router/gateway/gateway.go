@@ -21,6 +21,7 @@ func NewGateway(ctx log.Interface, id string) *Gateway {
 		Status:      NewStatusStore(),
 		Utilization: NewUtilization(),
 		Schedule:    NewSchedule(ctx),
+		Monitors:    pb_monitor.NewRegistry(ctx),
 		Ctx:         ctx,
 	}
 }
@@ -37,7 +38,7 @@ type Gateway struct {
 	token         string
 	authenticated bool
 
-	Monitors map[string]pb_monitor.GatewayClient
+	Monitors pb_monitor.Registry
 
 	Ctx log.Interface
 }
@@ -50,9 +51,7 @@ func (g *Gateway) SetAuth(token string, authenticated bool) {
 		return
 	}
 	g.token = token
-	for _, monitor := range g.Monitors {
-		monitor.SetToken(token)
-	}
+	g.Monitors.SetGatewayToken(g.ID, g.token)
 }
 
 func (g *Gateway) updateLastSeen() {
@@ -68,11 +67,10 @@ func (g *Gateway) HandleStatus(status *pb.Status) (err error) {
 	}
 	g.updateLastSeen()
 
-	if g.Monitors != nil {
-		for _, monitor := range g.Monitors {
-			go monitor.SendStatus(status)
-		}
+	for _, monitor := range g.Monitors.GatewayClients(g.ID) {
+		go monitor.SendStatus(status)
 	}
+
 	return nil
 }
 
@@ -96,10 +94,8 @@ func (g *Gateway) HandleUplink(uplink *pb_router.UplinkMessage) (err error) {
 	uplink.GatewayMetadata.GatewayTrusted = g.authenticated
 	uplink.GatewayMetadata.GatewayId = g.ID
 
-	if g.Monitors != nil {
-		for _, monitor := range g.Monitors {
-			go monitor.SendUplink(uplink)
-		}
+	for _, monitor := range g.Monitors.GatewayClients(g.ID) {
+		go monitor.SendUplink(uplink)
 	}
 	return nil
 }
@@ -111,10 +107,8 @@ func (g *Gateway) HandleDownlink(identifier string, downlink *pb_router.Downlink
 		return err
 	}
 
-	if g.Monitors != nil {
-		for _, monitor := range g.Monitors {
-			go monitor.SendDownlink(downlink)
-		}
+	for _, monitor := range g.Monitors.GatewayClients(g.ID) {
+		go monitor.SendDownlink(downlink)
 	}
 	return nil
 }
